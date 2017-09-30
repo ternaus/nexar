@@ -24,7 +24,6 @@ criterion.
 """
 
 import cPickle
-# import cv2
 import os
 import numpy as np
 from tqdm import tqdm
@@ -111,10 +110,9 @@ class Nexar2(IMDB):
         :param index: index of a specific image
         :return: record['boxes', 'gt_classes', 'gt_overlaps', 'flipped']
         """
-        # import xml.etree.ElementTree as ET
+
         roi_rec = dict()
         roi_rec['image'] = self.image_path_from_index(index)
-        # size = cv2.imread(roi_rec['image']).shape
         img = Image.open(roi_rec['image'])
         width, height = img.size
 
@@ -123,48 +121,41 @@ class Nexar2(IMDB):
         roi_rec['height'] = size[0]
         roi_rec['width'] = size[1]
 
-        filename = os.path.join(self.data_path, 'annotations', index + '.csv')
-        df = pd.read_csv(filename)
-        # tree = ET.parse(filename)
-        # objs = tree.findall('object')
-        # if not self.config['use_diff']:
-        #     non_diff_objs = [obj for obj in objs if int(obj.find('difficult').text) == 0]
-        #     objs = non_diff_objs
-        # num_objs = len(objs)
-        num_objs = df.shape[0]
+        if self.image_set == 'train':
+            filename = os.path.join(self.data_path, 'annotations', index + '.csv')
+            df = pd.read_csv(filename)
+            num_objs = df.shape[0]
 
-        boxes = np.zeros((num_objs, 4), dtype=np.uint16)
-        gt_classes = np.zeros((num_objs), dtype=np.int32)
-        overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
+            boxes = np.zeros((num_objs, 4), dtype=np.uint16)
+            gt_classes = np.zeros((num_objs), dtype=np.int32)
+            overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
 
-        class_to_index = dict(zip(self.classes, range(self.num_classes)))
-        # Load object bounding boxes into a data frame.
-        for ix, obj in enumerate(df.index):
-            # bbox = obj.find('bndbox')
-            # Make pixel indexes 0-based
+            class_to_index = dict(zip(self.classes, range(self.num_classes)))
+            # Load object bounding boxes into a data frame.
+            for ix, obj in enumerate(df.index):
+                # Make pixel indexes 0-based
 
-            name = 'car'
-            x1 = max(df.loc[ix, 'xmin'], 1)
-            y1 = max(df.loc[ix, 'ymin'], 1)
-            x2 = min(df.loc[ix, 'xmax'], width - 1)
-            y2 = min(df.loc[ix, 'ymax'], width - 1)
+                name = 'car'
+                x1 = max(df.loc[ix, 'xmin'], 1)
+                y1 = max(df.loc[ix, 'ymin'], 1)
+                x2 = min(df.loc[ix, 'xmax'], width - 1)
+                y2 = min(df.loc[ix, 'ymax'], width - 1)
 
-            # x1 = float(bbox.find('xmin').text) - 1
-            # y1 = float(bbox.find('ymin').text) - 1
-            # x2 = float(bbox.find('xmax').text) - 1
-            # y2 = float(bbox.find('ymax').text) - 1
-            # cls = class_to_index[obj.find('name').text.lower().strip()]
-            cls = class_to_index[name]
-            boxes[ix, :] = [x1, y1, x2, y2]
-            gt_classes[ix] = cls
-            overlaps[ix, cls] = 1.0
+                cls = class_to_index[name]
+                boxes[ix, :] = [x1, y1, x2, y2]
+                gt_classes[ix] = cls
+                overlaps[ix, cls] = 1.0
 
-        roi_rec.update({'boxes': boxes,
-                        'gt_classes': gt_classes,
-                        'gt_overlaps': overlaps,
-                        'max_classes': overlaps.argmax(axis=1),
-                        'max_overlaps': overlaps.max(axis=1),
-                        'flipped': False})
+            roi_rec.update({'boxes': boxes,
+                            'gt_classes': gt_classes,
+                            'gt_overlaps': overlaps,
+                            'max_classes': overlaps.argmax(axis=1),
+                            'max_overlaps': overlaps.max(axis=1),
+                            'flipped': False})
+        else:
+            boxes = np.zeros((1, 4), dtype=np.uint8)
+            roi_rec.update({'boxes': boxes,
+                            'flipped': False})
         return roi_rec
 
     def load_selective_search_roidb(self, gt_roidb):
@@ -214,79 +205,3 @@ class Nexar2(IMDB):
         logger.info('%s wrote ss roidb to %s' % (self.name, cache_file))
 
         return roidb
-
-    # def evaluate_detections(self, detections):
-    #     """
-    #     top level evaluations
-    #     :param detections: result matrix, [bbox, confidence]
-    #     :return: None
-    #     """
-    #     # make all these folders for results
-    #     result_dir = os.path.join(self.devkit_path, 'results')
-    #     if not os.path.exists(result_dir):
-    #         os.mkdir(result_dir)
-    #     year_folder = os.path.join(self.devkit_path, 'results', 'VOC' + self.year)
-    #     if not os.path.exists(year_folder):
-    #         os.mkdir(year_folder)
-    #     res_file_folder = os.path.join(self.devkit_path, 'results', 'VOC' + self.year, 'Main')
-    #     if not os.path.exists(res_file_folder):
-    #         os.mkdir(res_file_folder)
-    #
-    #     self.write_pascal_results(detections)
-    #     self.do_python_eval()
-    #
-    # def get_result_file_template(self):
-    #     """
-    #     this is a template
-    #     VOCdevkit/results/VOC2007/Main/<comp_id>_det_test_aeroplane.txt
-    #     :return: a string template
-    #     """
-    #     res_file_folder = os.path.join(self.devkit_path, 'results', 'VOC' + self.year, 'Main')
-    #     comp_id = self.config['comp_id']
-    #     filename = comp_id + '_det_' + self.image_set + '_{:s}.txt'
-    #     path = os.path.join(res_file_folder, filename)
-    #     return path
-    #
-    # def write_pascal_results(self, all_boxes):
-    #     """
-    #     write results files in pascal devkit path
-    #     :param all_boxes: boxes to be processed [bbox, confidence]
-    #     :return: None
-    #     """
-    #     for cls_ind, cls in enumerate(self.classes):
-    #         if cls == '__background__':
-    #             continue
-    #         logger.info('Writing %s VOC results file' % cls)
-    #         filename = self.get_result_file_template().format(cls)
-    #         with open(filename, 'wt') as f:
-    #             for im_ind, index in enumerate(self.image_set_index):
-    #                 dets = all_boxes[cls_ind][im_ind]
-    #                 if len(dets) == 0:
-    #                     continue
-    #                 # the VOCdevkit expects 1-based indices
-    #                 for k in range(dets.shape[0]):
-    #                     f.write('{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.
-    #                             format(index, dets[k, -1],
-    #                                    dets[k, 0] + 1, dets[k, 1] + 1, dets[k, 2] + 1, dets[k, 3] + 1))
-    #
-    # def do_python_eval(self):
-    #     """
-    #     python evaluation wrapper
-    #     :return: None
-    #     """
-    #     annopath = os.path.join(self.data_path, 'Annotations', '{0!s}.xml')
-    #     imageset_file = os.path.join(self.data_path, 'ImageSets', 'Main', self.image_set + '.txt')
-    #     annocache = os.path.join(self.cache_path, self.name + '_annotations.pkl')
-    #     aps = []
-    #     # The PASCAL VOC metric changed in 2010
-    #     use_07_metric = True if int(self.year) < 2010 else False
-    #     logger.info('VOC07 metric? ' + ('Y' if use_07_metric else 'No'))
-    #     for cls_ind, cls in enumerate(self.classes):
-    #         if cls == '__background__':
-    #             continue
-    #         filename = self.get_result_file_template().format(cls)
-    #         rec, prec, ap = voc_eval(filename, annopath, imageset_file, cls, annocache,
-    #                                  ovthresh=0.5, use_07_metric=use_07_metric)
-    #         aps += [ap]
-    #         logger.info('AP for {} = {:.4f}'.format(cls, ap))
-    #     logger.info('Mean AP = {:.4f}'.format(np.mean(aps)))
