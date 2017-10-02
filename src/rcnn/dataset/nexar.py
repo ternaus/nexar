@@ -205,3 +205,24 @@ class Nexar2(IMDB):
         logger.info('%s wrote ss roidb to %s' % (self.name, cache_file))
 
         return roidb
+
+    def evaluate_detections(self, detections, ann_type='bbox', all_masks=None, epoch=0):
+        cls_ind = 1
+
+        temp = []
+
+        for im_ind, index in enumerate(self.image_set_index):
+            dets = detections[cls_ind][im_ind]
+            for k in range(dets.shape[0]):
+                confidence = dets[k, -1]
+                file_name = str(index) + '.jpg'
+                x0 = dets[k, 0]
+                y0 = dets[k, 1]
+                x1 = dets[k, 2]
+                y1 = dets[k, 3]
+
+                temp += [(file_name, x0, y0, x1, y1, 'car', confidence)]
+
+        df = pd.DataFrame(temp, columns=['image_filename', 'x0', 'y0', 'x1', 'y1', 'label', 'confidence'])
+
+        df.to_csv(os.path.join('../data', self.image_set + '.csv'), index=False)
